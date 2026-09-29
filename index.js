@@ -1,6 +1,6 @@
-require('dotenv').config();
 const { App } = require('@slack/bolt');
-
+const axios = require('axios');
+require('dotenv').config();
 
 const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
@@ -8,25 +8,43 @@ const app = new App({
   socketMode: true,
 });
 
-
-app.command('/mybot-joke', async ({ command, ack, respond }) => {
-  
+app.command('/weather', async ({ command, ack, respond }) => {
   await ack();
 
+  const locationQuery = command.text.trim();
+
+  if (!locationQuery) {
+    await respond('Please specify a location. Example: `/weather Tokyo`');
+    return;
+  }
+
   try {
-    const response = await fetch('https://official-joke-api.appspot.com/random_joke');
-    const joke = await response.json();
+    const geoRes = await axios.get(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationQuery)}&count=1`
+    );
 
+    if (!geoRes.data.results || geoRes.data.results.length === 0) {
+      await respond(`Location "${locationQuery}" not found.`);
+      return;
+    }
 
-    await respond(`${joke.setup}\n\n*${joke.punchline}*`);
+    const { latitude, longitude, name, country } = geoRes.data.results[0];
+
+    const weatherRes = await axios.get(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+    );
+    const { temperature, windspeed } = weatherRes.data.current_weather;
+
+    await respond(
+      `🌤️ *Current Weather in ${name}, ${country}*:\n• *Temperature:* ${temperature}°C\n• *Wind Speed:* ${windspeed} km/h`
+    );
   } catch (error) {
-    console.error(error);
-    await respond('No Joke Available.Try again later');
+    console.error('Error fetching weather:', error);
+    await respond('Error.');
   }
 });
 
-
 (async () => {
   await app.start();
-  console.log('Slack bot is running');
+  console.log('Slack weather bot is running!');
 })();
