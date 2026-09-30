@@ -22,31 +22,6 @@ Example usage:
 * `/weather Dubai`
 
 ---
-
-## Setup & Running Locally (Optional)
-
-If you want to host your own instance of Weather Bot:
-
-1. Clone the repository:
-   ```bash
-   git clone [https://github.com/0xAvaneesh/Slack-Bot.git](https://github.com/0xAvaneesh/Slack-Bot.git)
-   cd Slack-Bot
-Install dependencies:
-
-Bash
-npm install
-Set up your environment variables:
-Create a .env file in the root directory:
-
-Code snippet
-SLACK_BOT_TOKEN=xoxb-your-bot-token
-SLACK_SIGNING_SECRET=your-signing-secret
-WEATHER_API_KEY=your-weather-api-key
-PORT=3000
-Run the bot:
-
-Bash
-node index.js
 What I learned from this project
 Building Slack integrations using Node.js and the Slack Bolt framework.
 
