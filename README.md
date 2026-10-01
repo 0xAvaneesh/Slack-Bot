@@ -14,12 +14,12 @@ This project started as a Slack bot to experiment with backend development, work
 
 To use the bot in Slack:
 1. Open Slack and head over to any channel where the bot is added or msg it directly.
-2. Type `/weather` followed by the city you want to check.
+2. Type `/weatherbuddy` followed by the city you want to check.
 
 Example usage:
-* `/weather London`
-* `/weather Tokyo`
-* `/weather Dubai`
+* `/weatherbuddy London`
+* `/weatherbuddy Tokyo`
+* `/weatherbuddy Dubai`
 
 ---
 What I learned from this project:
