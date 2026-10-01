@@ -1,7 +1,6 @@
-
 require("dotenv").config();
 
-var App = require("@slack/bolt").App;
+var { App } = require("@slack/bolt");
 var axios = require("axios");
 
 var app = new App({
@@ -11,89 +10,68 @@ var app = new App({
   appToken: process.env.SLACK_APP_TOKEN
 });
 
-var weatherIcons = {
-  sunny: "☀️",
-  clear: "☀️",
-  cloud: "☁️",
-  rain: "🌧️",
-  snow: "❄️"
-};
-
-function getWeatherIcon(weather) {
+function getIcon(weather) {
   weather = weather.toLowerCase();
 
-  if (weather.includes("rain")) return weatherIcons.rain;
-  if (weather.includes("snow")) return weatherIcons.snow;
-  if (weather.includes("cloud")) return weatherIcons.cloud;
-  if (weather.includes("sun") || weather.includes("clear")) {
-    return weatherIcons.sunny;
+  if (weather.includes("rain")) return "🌧️";
+  if (weather.includes("cloud")) return "☁️";
+  if (weather.includes("sun") || weather.includes("clear")) return "☀️";
+  if (weather.includes("snow")) return "❄️";
+
+  return "🌡️";
+}
+
+async function getWeather(city, unit) {
+  var url = "https://wttr.in/" + encodeURIComponent(city) + "?format=j1";
+  var response = await axios.get(url);
+
+  var current = response.data.current_condition[0];
+  var area = response.data.nearest_area[0];
+
+  var temp;
+  var feels;
+  var wind;
+  var symbol;
+
+  if (unit == "C") {
+    temp = current.temp_C;
+    feels = current.FeelsLikeC;
+    wind = current.windspeedKmph + " km/h";
+    symbol = "°C";
+  } else {
+    temp = current.temp_F;
+    feels = current.FeelsLikeF;
+    wind = current.windspeedMiles + " mph";
+    symbol = "°F";
   }
 
-  return "";
+  return {
+    name: area.areaName[0].value,
+    weather: current.weatherDesc[0].value,
+    temp: temp,
+    feels: feels,
+    wind: wind,
+    humidity: current.humidity,
+    uv: current.uvIndex,
+    icon: getIcon(current.weatherDesc[0].value),
+    symbol: symbol
+  };
 }
 
-function getWeather(city, unit) {
-  var url = "https://wttr.in/" + encodeURIComponent(city) + "?format=j1";
-
-  return axios.get(url).then(function(response) {
-    var data = response.data;
-    var weather = data.current_condition[0];
-    var area = data.nearest_area[0];
-
-    var temp;
-    var feels;
-    var wind;
-    var symbol;
-
-    if (unit == "metric") {
-      temp = weather.temp_C;
-      feels = weather.FeelsLikeC;
-      wind = weather.windspeedKmph + " km/h";
-      symbol = "°C";
-    } else {
-      temp = weather.temp_F;
-      feels = weather.FeelsLikeF;
-      wind = weather.windspeedMiles + " mph";
-      symbol = "°F";
-    }
-
-    var condition = weather.weatherDesc[0].value;
-    var name = area.areaName[0].value;
-
-    return {
-      name: name,
-      condition: condition,
-      temp: temp,
-      feels: feels,
-      wind: wind,
-      humidity: weather.humidity,
-      uv: weather.uvIndex,
-      icon: getWeatherIcon(condition),
-      symbol: symbol
-    };
-  });
-}
-
-function makeBlocks(weather, city, unit) {
+function makeBlocks(w, city, unit) {
   return [
-    {
-      type: "header",
-      text: {
-        type: "plain_text",
-        text: weather.icon + " Weather in " + weather.name
-      }
-    },
     {
       type: "section",
       text: {
         type: "mrkdwn",
         text:
-          "*Condition:* " + weather.condition + "\n" +
-          "*Temperature:* " + weather.temp + weather.symbol + "\n" +
-          "*Feels like:* " + weather.feels + weather.symbol + "\n" +
-          "*Humidity:* " + weather.humidity + "%\n" +
-          "*Wind:* " + weather.wind + "\n" +
-          "*UV Index:* " + weather.uv
+          w.icon + " *Weather in " + w.name + "*\n\n" +
+          "*Condition:* " + w.weather + "\n" +
+          "*Temperature:* " + w.temp + w.symbol + "\n" +
+          "*Feels like:* " + w.feels + w.symbol + "\n" +
+          "*Humidity:* " + w.humidity + "%\n" +
+          "*Wind:* " + w.wind + "\n" +
+          "*UV:* " + w.uv
       }
     },
     {
@@ -103,65 +81,66 @@ function makeBlocks(weather, city, unit) {
           type: "button",
           text: {
             type: "plain_text",
-            text: unit == "metric" ? "Switch to °F" : "Switch to °C"
+            text: unit == "C" ? "Switch to °F" : "Switch to °C"
           },
           value: JSON.stringify({
             city: city,
-            unit: unit == "metric" ? "imperial" : "metric"
+            unit: unit == "C" ? "F" : "C"
           }),
-          action_id: "toggle_units"
+          action_id: "change_unit"
         }
       ]
     }
   ];
 }
 
-app.command("/weatherbuddy", function(data) {
-  data.ack();
+app.command("/weatherbuddy", async function({ command, ack, respond }) {
+  await ack();
 
-  var city = data.command.text.trim();
+  var city = command.text.trim();
 
   if (!city) {
-    return data.respond({
+    await respond({
       response_type: "ephemeral",
       text: "Please enter a city name."
     });
+    return;
   }
 
-  getWeather(city, "metric")
-    .then(function(weather) {
-      data.respond({
-        response_type: "in_channel",
-        blocks: makeBlocks(weather, city, "metric")
-      });
-    })
-    .catch(function() {
-      data.respond({
-        response_type: "ephemeral",
-        text: "Could not find weather for " + city
-      });
+  try {
+    var w = await getWeather(city, "C");
+
+    await respond({
+      response_type: "in_channel",
+      blocks: makeBlocks(w, city, "C")
     });
+  } catch (err) {
+    await respond({
+      response_type: "ephemeral",
+      text: "Could not find weather for " + city
+    });
+  }
 });
 
-app.action("toggle_units", function(data) {
-  data.ack();
+app.action("change_unit", async function({ ack, body, respond }) {
+  await ack();
 
-  var info = JSON.parse(data.body.actions[0].value);
+  var info = JSON.parse(body.actions[0].value);
 
-  getWeather(info.city, info.unit)
-    .then(function(weather) {
-      data.respond({
-        response_type: "in_channel",
-        replace_original: true,
-        blocks: makeBlocks(weather, info.city, info.unit)
-      });
-    })
-    .catch(function() {
-      data.respond({
-        response_type: "ephemeral",
-        text: "Could not change the temperature unit."
-      });
+  try {
+    var w = await getWeather(info.city, info.unit);
+
+    await respond({
+      response_type: "in_channel",
+      replace_original: true,
+      blocks: makeBlocks(w, info.city, info.unit)
     });
+  } catch (err) {
+    await respond({
+      response_type: "ephemeral",
+      text: "Something went wrong."
+    });
+  }
 });
 
 app.start(process.env.PORT || 3000);
